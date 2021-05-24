@@ -138,8 +138,16 @@ class WorkflowParams implements Serializable {
     String workflowWorkerImageDefault = "ploigos/ploigos-ci-agent-jenkins:latest"
 
     /* Container image to use when creating a workflow worker
+     * to run pipeline steps when performing unit test step(s). */
+    String workflowWorkerImageUnitTest = null
+
+    /* Container image to use when creating a workflow worker
      * to run pipeline steps when performing package application step(s). */
     String workflowWorkerImagePackage = null
+
+    /* Container image to use when creating a workflow worker
+     * to run pipeline steps when performing static code analysis step(s). */
+    String workflowWorkerImageStaticCodeAnalysis = null
 
     /* Container image to use when creating a workflow worker
      * to run pipeline steps when performing push push packaged artifacts step(s). */
@@ -150,8 +158,24 @@ class WorkflowParams implements Serializable {
     String workflowWorkerImageContainerOperations = "ploigos/ploigos-tool-containers:latest"
 
     /* Container image to use when creating a workflow worker
+     * to run pipeline steps when performing container image static compliance scan step(s). */
+    String workflowWorkerImageContainerImageStaticComplianceScan = "ploigos/ploigos-tool-openscap:latest"
+
+    /* Container image to use when creating a workflow worker to run pipeline steps
+     * when performing container image static vulnerability scan step(s). */
+    String workflowWorkerImageContainerImageStaticVulnerabilityScan = "ploigos/ploigos-tool-openscap:latest"
+
+    /* Container image to use when creating a workflow worker
      * to run pipeline steps when performing deploy step(s). */
     String workflowWorkerImageDeploy = "ploigos/ploigos-tool-argocd:latest"
+
+    /* Container image to use when creating a workflow worker
+     * to run pipeline steps when performing validate environment configuration step(s). */
+    String workflowWorkerImageValidateEnvironmentConfiguration = "ploigos/ploigos-tool-config-lint:latest"
+
+    /* Container image to use when creating a workflow worker
+     * to run pipeline steps when performing user acceptance tests (UAT) step(s). */
+    String workflowWorkerImageUAT = null
 
     /* Kubernetes ServiceAccount that the Jenkins Worker Kubernetes Pod should be deployed with.
      *
@@ -194,7 +218,7 @@ class WorkflowParams implements Serializable {
     String trustedCABundleConfigMapName = 'trustedcabundle'
 
     /*
-    Variable for setting toggling SSL Cert Verification in Git during the
+    Flag for setting toggling SSL Cert Verification in Git during the
         Pip Install of Step Runner. Set to 'true' for skipping cert verification.
     */
     String gitTlsNoVerify = false
@@ -223,10 +247,16 @@ def call(Map paramsMap) {
         .drop(GIT_REPO_NAME.length()-KUBE_LABEL_MAX_LENGTH)
 
     String WORKFLOW_WORKER_NAME_DEFAULT              = 'jnlp'
+    String WORKFLOW_WORKER_NAME_UNIT_TEST            = 'unit-test'
     String WORKFLOW_WORKER_NAME_PACKAGE              = 'package'
+    String WORKFLOW_WORKER_NAME_STATIC_CODE_ANALYSIS = 'static-code-analysis'
     String WORKFLOW_WORKER_NAME_PUSH_ARTIFACTS       = 'push-artifacts'
     String WORKFLOW_WORKER_NAME_CONTAINER_OPERATIONS = 'containers'
-    String WORKFLOW_WORKER_NAME_DEPLOY               = 'deploy'
+    String WORKFLOW_WORKER_NAME_CONTAINER_IMAGE_STATIC_COMPLIANCE_SCAN    = 'container-image-static-compliance-scan'
+    String WORKFLOW_WORKER_NAME_CONTAINER_IMAGE_STATIC_VULNERABILITY_SCAN = 'container-image-static-vulnerability-scan'
+    String WORKFLOW_WORKER_NAME_DEPLOY = 'deploy'
+    String WORKFLOW_WORKER_NAME_VALIDATE_ENVIRONMENT_CONFIGURATION        = 'validate-environment-configuration'
+    String WORKFLOW_WORKER_NAME_UAT    = 'uat'
 
     /* Workspace for the container users home directory.
      *
@@ -313,8 +343,28 @@ def call(Map paramsMap) {
             name: pgp-private-keys
           ${PLATFORM_MOUNTS}
           ${TLS_MOUNTS}
+        - name: ${WORKFLOW_WORKER_NAME_UNIT_TEST}
+          image: "${params.workflowWorkerImageUnitTest}"
+          imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
+          tty: true
+          command: ['sh', '-c', 'update-ca-trust && cat']
+          volumeMounts:
+          - mountPath: ${WORKFLOW_WORKER_WORKSPACE_HOME_PATH}
+            name: home-ploigos
+          ${PLATFORM_MOUNTS}
+          ${TLS_MOUNTS}
         - name: ${WORKFLOW_WORKER_NAME_PACKAGE}
           image: "${params.workflowWorkerImagePackage}"
+          imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
+          tty: true
+          command: ['sh', '-c', 'update-ca-trust && cat']
+          volumeMounts:
+          - mountPath: ${WORKFLOW_WORKER_WORKSPACE_HOME_PATH}
+            name: home-ploigos
+          ${PLATFORM_MOUNTS}
+          ${TLS_MOUNTS}
+        - name: ${WORKFLOW_WORKER_NAME_STATIC_CODE_ANALYSIS}
+          image: "${params.workflowWorkerImageStaticCodeAnalysis}"
           imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
           tty: true
           command: ['sh', '-c', 'update-ca-trust && cat']
@@ -343,8 +393,48 @@ def call(Map paramsMap) {
             name: home-ploigos
           ${PLATFORM_MOUNTS}
           ${TLS_MOUNTS}
+        - name: ${WORKFLOW_WORKER_NAME_CONTAINER_IMAGE_STATIC_COMPLIANCE_SCAN}
+          image: "${params.workflowWorkerImageContainerImageStaticComplianceScan}"
+          imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
+          tty: true
+          command: ['sh', '-c', 'update-ca-trust && cat']
+          volumeMounts:
+          - mountPath: ${WORKFLOW_WORKER_WORKSPACE_HOME_PATH}
+            name: home-ploigos
+          ${PLATFORM_MOUNTS}
+          ${TLS_MOUNTS}
+        - name: ${WORKFLOW_WORKER_NAME_CONTAINER_IMAGE_STATIC_VULNERABILITY_SCAN}
+          image: "${params.workflowWorkerImageContainerImageStaticVulnerabilityScan}"
+          imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
+          tty: true
+          command: ['sh', '-c', 'update-ca-trust && cat']
+          volumeMounts:
+          - mountPath: ${WORKFLOW_WORKER_WORKSPACE_HOME_PATH}
+            name: home-ploigos
+          ${PLATFORM_MOUNTS}
+          ${TLS_MOUNTS}
         - name: ${WORKFLOW_WORKER_NAME_DEPLOY}
           image: "${params.workflowWorkerImageDeploy}"
+          imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
+          tty: true
+          command: ['sh', '-c', 'update-ca-trust && cat']
+          volumeMounts:
+          - mountPath: ${WORKFLOW_WORKER_WORKSPACE_HOME_PATH}
+            name: home-ploigos
+          ${PLATFORM_MOUNTS}
+          ${TLS_MOUNTS}
+        - name: ${WORKFLOW_WORKER_NAME_VALIDATE_ENVIRONMENT_CONFIGURATION}
+          image: "${params.workflowWorkerImageValidateEnvironmentConfiguration}"
+          imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
+          tty: true
+          command: ['sh', '-c', 'update-ca-trust && cat']
+          volumeMounts:
+          - mountPath: ${WORKFLOW_WORKER_WORKSPACE_HOME_PATH}
+            name: home-ploigos
+          ${PLATFORM_MOUNTS}
+          ${TLS_MOUNTS}
+        - name: ${WORKFLOW_WORKER_NAME_UAT}
+          image: "${params.workflowWorkerImageUAT}"
           imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
           tty: true
           command: ['sh', '-c', 'update-ca-trust && cat']
@@ -503,6 +593,21 @@ def call(Map paramsMap) {
                             }
                         }
                     }
+                    stage('CI: Run Unit Tests') {
+                        steps {
+                            container("${WORKFLOW_WORKER_NAME_UNIT_TEST}") {
+                                sh """
+                                    if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                    set -eu -o pipefail
+
+                                    source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                    psr \
+                                        --config ${PSR_CONFIG_ARG} \
+                                        --step unit-test
+                                """
+                            }
+                        }
+                    }
                     stage('CI: Package Application') {
                         steps {
                             container("${WORKFLOW_WORKER_NAME_PACKAGE}") {
@@ -514,6 +619,21 @@ def call(Map paramsMap) {
                                     psr \
                                         --config ${PSR_CONFIG_ARG} \
                                         --step package
+                                """
+                            }
+                        }
+                    }
+                    stage('CI: Static Code Analysis') {
+                        steps {
+                            container("${WORKFLOW_WORKER_NAME_STATIC_CODE_ANALYSIS}") {
+                                sh """
+                                    if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                    set -eu -o pipefail
+
+                                    source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                    psr \
+                                        --config ${PSR_CONFIG_ARG} \
+                                        --step static-code-analysis
                                 """
                             }
                         }
@@ -548,6 +668,40 @@ def call(Map paramsMap) {
                             }
                         }
                     }
+                    stage('CI: Static Image Scan') {
+                        parallel {
+                            stage('CI: Static Image Scan: Compliance') {
+                                steps {
+                                    container("${WORKFLOW_WORKER_NAME_CONTAINER_IMAGE_STATIC_COMPLIANCE_SCAN}") {
+                                        sh """
+                                            if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                            set -eu -o pipefail
+
+                                            source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                            psr \
+                                                --config ${PSR_CONFIG_ARG} \
+                                                --step container-image-static-compliance-scan
+                                        """
+                                    }
+                                }
+                            }
+                            stage('CI: Static Image Scan: Vulnerability') {
+                                steps {
+                                    container("${WORKFLOW_WORKER_NAME_CONTAINER_IMAGE_STATIC_VULNERABILITY_SCAN}") {
+                                        sh """
+                                            if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                            set -eu -o pipefail
+
+                                            source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                            psr \
+                                                --config ${PSR_CONFIG_ARG} \
+                                                --step container-image-static-vulnerability-scan
+                                        """
+                                    }
+                                }
+                            }
+                        }
+                    }
                     stage('CI: Push Container Image to Repository') {
                         steps {
                             container("${WORKFLOW_WORKER_NAME_CONTAINER_OPERATIONS}") {
@@ -563,10 +717,8 @@ def call(Map paramsMap) {
                             }
                         }
                     }
-		   stage('CI: Generate Meta Data Report') {
+                    stage('CI: Sign Container Image') {
                         steps {
-
-
                             container("${WORKFLOW_WORKER_NAME_CONTAINER_OPERATIONS}") {
                                 sh """
                                     if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
@@ -575,13 +727,11 @@ def call(Map paramsMap) {
                                     source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
                                     psr \
                                         --config ${PSR_CONFIG_ARG} \
-                                        --step generate_and_publish_workflow_report
+                                        --step sign-container-image
                                 """
                             }
                         }
                     }
-
-
                 }
             } // CI Stages
 
@@ -612,6 +762,38 @@ def call(Map paramsMap) {
                                     psr \
                                         --config ${PSR_CONFIG_ARG} \
                                         --step deploy \
+                                        --environment ${params.envNameDev}
+                                """
+                            }
+                        }
+                    }
+                    stage("DEV: Validate Environment Configuration") {
+                        steps {
+                            container("${WORKFLOW_WORKER_NAME_VALIDATE_ENVIRONMENT_CONFIGURATION}") {
+                                sh """
+                                    if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                    set -eu -o pipefail
+
+                                    source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                    psr \
+                                        --config ${PSR_CONFIG_ARG} \
+                                        --step validate-environment-configuration \
+                                        --environment ${params.envNameDev}
+                                """
+                            }
+                        }
+                    }
+                    stage('DEV: Run User Acceptance Tests') {
+                        steps {
+                            container("${WORKFLOW_WORKER_NAME_UAT}") {
+                                sh """
+                                    if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                    set -eu -o pipefail
+
+                                    source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                    psr \
+                                        --config ${PSR_CONFIG_ARG} \
+                                        --step uat \
                                         --environment ${params.envNameDev}
                                 """
                             }
@@ -652,6 +834,38 @@ def call(Map paramsMap) {
                             }
                         }
                     }
+                    stage('TEST: Validate Environment Configuration') {
+                        steps {
+                            container("${WORKFLOW_WORKER_NAME_VALIDATE_ENVIRONMENT_CONFIGURATION}") {
+                                sh """
+                                    if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                    set -eu -o pipefail
+
+                                    source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                    psr \
+                                        --config ${PSR_CONFIG_ARG} \
+                                        --step validate-environment-configuration \
+                                        --environment ${params.envNameTest}
+                                """
+                            }
+                        }
+                    }
+                    stage('Run User Acceptance Tests') {
+                        steps {
+                            container("${WORKFLOW_WORKER_NAME_UAT}") {
+                                sh """
+                                    if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                    set -eu -o pipefail
+
+                                    source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                    psr \
+                                        --config ${PSR_CONFIG_ARG} \
+                                        --step uat \
+                                        --environment ${params.envNameTest}
+                                """
+                            }
+                        }
+                    }
                 }
             } // TEST Stage
 
@@ -682,6 +896,22 @@ def call(Map paramsMap) {
                                     psr \
                                         --config ${PSR_CONFIG_ARG} \
                                         --step deploy \
+                                        --environment ${params.envNameProd}
+                                """
+                            }
+                        }
+                    }
+                    stage('PROD: Validate Environment Configuration') {
+                        steps {
+                            container("${WORKFLOW_WORKER_NAME_VALIDATE_ENVIRONMENT_CONFIGURATION}") {
+                                sh """
+                                    if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                    set -eu -o pipefail
+
+                                    source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                    psr \
+                                        --config ${PSR_CONFIG_ARG} \
+                                        --step validate-environment-configuration \
                                         --environment ${params.envNameProd}
                                 """
                             }
