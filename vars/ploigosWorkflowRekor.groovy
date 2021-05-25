@@ -177,6 +177,10 @@ class WorkflowParams implements Serializable {
      * to run pipeline steps when performing user acceptance tests (UAT) step(s). */
     String workflowWorkerImageUAT = null
 
+    /* Container image to use when creating a workflow worker
+     * to run pipeline steps when performing automated-governance step(s). */
+    String workflowWorkerAutomatedGovernance = "ploigos/ploigos-tool-rekor:latest"
+
     /* Kubernetes ServiceAccount that the Jenkins Worker Kubernetes Pod should be deployed with.
      *
      * IMPORTANT
@@ -238,13 +242,13 @@ def call(Map paramsMap) {
     // SEE: https://stackoverflow.com/questions/25088034/use-git-repo-name-as-env-variable-in-jenkins-job
     String GIT_BRANCH = scm.branches[0].name
     String GIT_BRANCH_KUBE_LABEL_VALUE = GIT_BRANCH
-        .replaceAll(KUBE_LABEL_NOT_SAFE_CHARS_REGEX, '_')
-        .drop(GIT_BRANCH.length()-KUBE_LABEL_MAX_LENGTH)
+            .replaceAll(KUBE_LABEL_NOT_SAFE_CHARS_REGEX, '_')
+            .drop(GIT_BRANCH.length()-KUBE_LABEL_MAX_LENGTH)
     String GIT_URL = scm.userRemoteConfigs[0].url
     String GIT_REPO_NAME = "${GIT_URL.replaceFirst(/^.*\/([^\/]+?).git$/, '$1')}"
     String GIT_REPO_NAME_KUBE_LABEL_VALUE = GIT_REPO_NAME
-        .replaceAll(KUBE_LABEL_NOT_SAFE_CHARS_REGEX, '-')
-        .drop(GIT_REPO_NAME.length()-KUBE_LABEL_MAX_LENGTH)
+            .replaceAll(KUBE_LABEL_NOT_SAFE_CHARS_REGEX, '-')
+            .drop(GIT_REPO_NAME.length()-KUBE_LABEL_MAX_LENGTH)
 
     String WORKFLOW_WORKER_NAME_DEFAULT              = 'jnlp'
     String WORKFLOW_WORKER_NAME_UNIT_TEST            = 'unit-test'
@@ -257,6 +261,7 @@ def call(Map paramsMap) {
     String WORKFLOW_WORKER_NAME_DEPLOY = 'deploy'
     String WORKFLOW_WORKER_NAME_VALIDATE_ENVIRONMENT_CONFIGURATION        = 'validate-environment-configuration'
     String WORKFLOW_WORKER_NAME_UAT    = 'uat'
+    String WORKFLOW_WORKER_NAME_AUTOMATED_GOVERNANCE = 'automated-governance'
 
     /* Workspace for the container users home directory.
      *
@@ -309,7 +314,7 @@ def call(Map paramsMap) {
 
     /* Combine this app's local config with platform-level config, if separatePlatformConfig == true */
     String PSR_CONFIG_ARG = params.separatePlatformConfig ?
-        "${PLATFORM_CONFIG_DIR} ${params.stepRunnerConfigDir}" : "${params.stepRunnerConfigDir}"
+            "${PLATFORM_CONFIG_DIR} ${params.stepRunnerConfigDir}" : "${params.stepRunnerConfigDir}"
 
     pipeline {
         options {
@@ -441,6 +446,18 @@ def call(Map paramsMap) {
           volumeMounts:
           - mountPath: ${WORKFLOW_WORKER_WORKSPACE_HOME_PATH}
             name: home-ploigos
+          ${PLATFORM_MOUNTS}
+          ${TLS_MOUNTS}
+        - name: ${WORKFLOW_WORKER_NAME_AUTOMATED_GOVERNANCE}
+          image: "${params.workflowWorkerAutomatedGovernance}"
+          imagePullPolicy: "${params.workflowWorkersImagePullPolicy}"
+          tty: true
+          command: ['sh', '-c', 'update-ca-trust && cat']
+          volumeMounts:
+          - mountPath: ${WORKFLOW_WORKER_WORKSPACE_HOME_PATH}
+            name: home-ploigos
+          - mountPath: /var/pgp-private-keys
+            name: pgp-private-keys
           ${PLATFORM_MOUNTS}
           ${TLS_MOUNTS}
         volumes:
@@ -668,6 +685,21 @@ def call(Map paramsMap) {
                             }
                         }
                     }
+                    stage('CI: Automated Governance') {
+                        steps {
+                            container("${WORKFLOW_WORKER_NAME_AUTOMATED_GOVERNANCE}") {
+                                sh """
+                                    if [ "${params.verbose}" == "true" ]; then set -x; else set +x; fi
+                                    set -eu -o pipefail
+
+                                    source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
+                                    psr \
+                                        --config ${PSR_CONFIG_ARG} \
+                                        --step automated-governance \
+                                """
+                            }
+                        }
+                    }
                     stage('CI: Static Image Scan') {
                         parallel {
                             stage('CI: Static Image Scan: Compliance') {
@@ -732,21 +764,6 @@ def call(Map paramsMap) {
                             }
                         }
                     }
-		   stage('CI: Automated Governance') {
-			steps {
-			  container("${WORKFLOW_WORKER_NAME_CONTAINER_OPERATIONS}") {
-				sh """
-				 if [ "$params.verbose}" == "true" ]' then set -x; else set +x; fi
-				 set -eu -o pipefail
-
-				source ${HOME}/${WORKFLOW_WORKER_VENV_NAME}/bin/activate
-			        psr \
-					--config ${PSR_CONFIG_ARG} \
-					--step automated-governance
-				"""
-			    }
-                         }
-		   }
                 }
             } // CI Stages
 
